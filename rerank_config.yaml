@@ -1,0 +1,35 @@
+model:
+  mode: cross
+  cross_name: BAAI/bge-reranker-v2-m3
+  embedding_name: intfloat/multilingual-e5-base
+  batch_size_cross: 32
+  batch_size_bi: 64
+  normalize_embeddings: true
+  trust_remote_code: true
+
+huggingface:
+  token: null
+  cache_dir: null
+  model_dir: /app/models
+  prefetch:
+    - sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+    - BAAI/bge-reranker-v2-m3
+
+server:
+  host: 0.0.0.0
+  port: 8000
+  cors_origins: ["*"]
+  api_keys:
+    - change-me-123
+  warmup:
+    enabled: true
+    load:
+      cross: true       # charge le cross-encoder (reranker)
+      bi: false         # charge le bi-encoder (si tu utilises le mode "bi")
+      embedding: false   # charge le modèle d'embedding utilisé par /v1/encode
+    texts: ["warmup", "échauffement"]  # petits textes pour un « forward »
+
+logging:
+  level: INFO
+  format: json    # json or text
+  file: null      # null -> stdout (container logs)

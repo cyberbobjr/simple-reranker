@@ -1,0 +1,26 @@
+services:
+  rerank:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: local/rerank:latest
+    container_name: rerank-service
+    ports:
+      - "8000:8000"
+    environment:
+      RERANK_API_KEYS: ${RERANK_API_KEYS}
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN}
+      HF_HOME: /root/.cache/huggingface
+    volumes:
+      - ./rerank_config.yaml:/app/rerank_config.yaml:ro
+      - ./volumes/reranking/models:/app/models
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  hf-cache:
