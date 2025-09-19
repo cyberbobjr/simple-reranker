@@ -606,7 +606,7 @@ def make_api_key_dependency(config):
             provided = x_api_key.strip()
         elif authorization and authorization.strip():
             import re
-            m = re.match(r"(?i)Bearer\\s+(.+)", authorization.strip())
+            m = re.match(r"(?i)Bearer\s+(.+)", authorization.strip())
             if m: provided = m.group(1).strip()
         if not provided or provided not in allowed_keys:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key")
