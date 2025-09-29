@@ -72,7 +72,15 @@ class EmbeddingService:
         return out
 
 
-    def _encode_batch_transformers(self, texts: List[str], tokenizer, model, max_tokens: int = 512, device: str = "cuda", dtype: torch.dtype = torch.bfloat16) -> torch.Tensor:
+    def _encode_batch_transformers(
+        self,
+        texts: List[str],
+        tokenizer: AutoTokenizer,
+        model: AutoModel,
+        max_tokens: int = 512,
+        device: str = "cuda",
+        dtype: torch.dtype = torch.bfloat16
+    ) -> torch.Tensor:
         """Encode with direct transformers (for Qwen3-Embedding-8B for example)."""
         # Try encode() method first if available
         try:
@@ -115,9 +123,7 @@ class EmbeddingService:
                 else:
                     dtype = torch.float32
 
-                # PyTorch optimizations
-                torch.backends.cuda.matmul.allow_tf32 = True
-                torch.set_float32_matmul_precision("high")
+                # NOTE: PyTorch optimizations are now set at application startup
 
                 tokenizer = AutoTokenizer.from_pretrained(name, trust_remote_code=trust_remote_code, cache_dir=cache_folder)
                 model = AutoModel.from_pretrained(

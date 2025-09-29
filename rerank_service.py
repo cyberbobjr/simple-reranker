@@ -492,6 +492,15 @@ def main():
 
     config = Config(args.config)
     _setup_logging(config.data)
+
+    # Configure PyTorch optimizations at application startup
+    try:
+        import torch
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.set_float32_matmul_precision("high")
+    except ImportError:
+        pass  # PyTorch not available, skip optimizations
+
     hf_summary = config.ensure_hf_auth_and_cache()
     warmup_summary = warmup_models(config)
 
