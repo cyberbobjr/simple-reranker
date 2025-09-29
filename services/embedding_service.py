@@ -37,34 +37,34 @@ class EmbeddingService:
 
     def _mrl_downproject(self, vecs: torch.Tensor, out_dim: Optional[int]) -> torch.Tensor:
         """
-        Matryoshka (MRL) down-projection: conserve le PRÉFIXE des dimensions.
-        - Entrée : vecs (B, D) = embeddings déjà poolés (ex. last-token ou mean-pooling).
-        - out_dim : dimension cible (<= D). Si None ou >= D, on retourne vecs normalisé.
-        - Sortie : (B, out_dim) sur le même device/dtype que vecs, L2-normalisé (cosine-ready).
+        Matryoshka (MRL) down-projection: preserves the PREFIX of dimensions.
+        - Input: vecs (B, D) = already pooled embeddings (e.g. last-token or mean-pooling).
+        - out_dim: target dimension (<= D). If None or >= D, returns normalized vecs.
+        - Output: (B, out_dim) on same device/dtype as vecs, L2-normalized (cosine-ready).
 
-        Remarques:
-        - Stable et constant à travers les batchs (pas de PCA recalculée).
-        - Compatible Qwen3-Embedding-4B (MRL) : les premières dimensions contiennent
-        l’info la plus utile.
+        Notes:
+        - Stable and constant across batches (no PCA recalculation).
+        - Compatible with Qwen3-Embedding-4B (MRL): first dimensions contain
+        the most useful information.
         """
         if vecs.ndim != 2:
             raise ValueError(f"Expected 2D tensor (B, D), got shape {tuple(vecs.shape)}")
 
         B, D = vecs.shape
         if not out_dim or out_dim >= D:
-            # Normalise en place logique (cosine distance); garde dtype/device
+            # Logical in-place normalization (cosine distance); preserves dtype/device
             out = F.normalize(vecs, p=2, dim=1)
             return out
 
         if out_dim <= 0:
             raise ValueError(f"out_dim must be > 0, got {out_dim}")
 
-        # --- Matryoshka slice: on garde le PRÉFIXE ---
-        # Pas de copie inutile : .narrow() + .contiguous() pour alignement mémoire propre
+        # --- Matryoshka slice: preserve the PREFIX ---
+        # No unnecessary copy: .narrow() + .contiguous() for clean memory alignment
         out = vecs.narrow(dim=1, start=0, length=out_dim).contiguous()
 
-        # L2-normalisation (cosine-friendly). Évite division par 0 via eps
-        # (p.ex. batch très rare de zéros).
+        # L2-normalization (cosine-friendly). Avoids division by 0 via eps
+        # (e.g. very rare batch of zeros).
         eps = 1e-12 if out.dtype in (torch.float32, torch.float64) else 1e-6
         norms = out.norm(p=2, dim=1, keepdim=True).clamp_min(eps)
         out = out / norms

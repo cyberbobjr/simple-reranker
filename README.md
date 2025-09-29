@@ -8,12 +8,15 @@ A high-performance FastAPI-based reranking and embedding service with Cohere-com
 - **🌍 Multilingual Support**: Built-in support for multilingual models
 - **⚡ High Performance**: Optimized batch processing and model caching
 - **🚀 Direct Transformers Support**: Advanced models like Qwen3-Embedding-8B with native transformers
-- **⚡ Flash Attention**: Automatic flash attention activation for supported models
-- **🎯 Precision Control**: bfloat16/float16 support for optimal GPU performance
-- **📐 PCA Downprojection**: Optional on-the-fly dimensionality reduction
+- **🤖 Intelligent Model Detection**: Automatic detection of models requiring direct transformers vs sentence-transformers
+- **⚡ Flash Attention**: Automatic flash attention activation for supported models (2-4x speedup)
+- **🎯 Precision Control**: bfloat16/float16/float32 support for optimal GPU performance
+- **📐 Matryoshka (MRL) Downprojection**: Stable dimensionality reduction preserving prefix dimensions
+- **📏 Extended Context Support**: Up to 32k tokens for advanced models
+- **🔧 Advanced PyTorch Optimizations**: TF32, high precision matmul, inference mode
 - **🔌 Cohere-Compatible API**: Drop-in replacement for Cohere rerank API
 - **🛡️ Security**: API key authentication and CORS configuration
-- **📊 Monitoring**: Comprehensive logging and diagnostics endpoints
+- **📊 Monitoring**: Comprehensive logging and diagnostics endpoints with version tracking
 - **🔥 Model Warmup**: Pre-loading and warmup for faster inference
 - **🐳 Container Ready**: Docker and Podman support
 - **⚙️ Flexible Configuration**: YAML-based configuration system
@@ -27,8 +30,8 @@ A high-performance FastAPI-based reranking and embedding service with Cohere-com
 | `/v1/encode` | POST | Generate embeddings |
 | `/v1/models` | GET | List available models |
 | `/v1/models/reload` | POST | Reload models |
-| `/v1/config` | GET | Get current configuration |
-| `/v1/diagnostics` | GET | System diagnostics |
+| `/v1/config` | GET | Get current configuration (with version) |
+| `/v1/diagnostics` | GET | System diagnostics (with version) |
 
 ## 🛠️ Installation
 
@@ -246,11 +249,11 @@ model:
   normalize_embeddings: true    # Normalize embedding vectors
   trust_remote_code: true       # Allow custom model code execution
 
-  # Advanced options for direct transformers models (Qwen3, etc.)
-  dtype: "bfloat16"             # Precision: bfloat16, float16, float32 (bfloat16 recommended for RTX 5090)
-  use_flash_attention: true     # Enable flash attention if available (significant speedup)
-  max_tokens: 16384             # Maximum context length (16k safe on RTX 5090, 32k possible)
-  output_dimension: null        # Optional PCA downprojection (e.g. 1024 for dimension reduction)
+  # Advanced options for direct transformers models (auto-detected for Qwen3, etc.)
+  dtype: "bfloat16"             # Precision: bfloat16, float16, float32 (bfloat16 recommended for RTX 5090/A100)
+  use_flash_attention: true     # Enable flash attention if available (2-4x speedup on modern GPUs)
+  max_tokens: 16384             # Maximum context length (16k recommended, 32k possible on high-end GPUs)
+  output_dimension: null        # Optional Matryoshka downprojection (e.g. 1024 for stable dimension reduction)
 ```
 
 ### Hugging Face Configuration
@@ -345,23 +348,29 @@ curl -H "Authorization: Bearer your-key" \
 
 ### Direct Transformers Integration
 
-The service automatically detects and optimizes advanced embedding models like **Qwen3-Embedding-8B** that require direct transformers integration:
+The service **automatically detects** and optimizes advanced embedding models like **Qwen3-Embedding-8B** that require direct transformers integration, providing significant performance improvements over standard sentence-transformers:
 
 ```yaml
 model:
-  embedding_name: Qwen/Qwen3-Embedding-8B
-  dtype: "bfloat16"           # Optimal precision for RTX 5090
-  use_flash_attention: true   # Automatic flash attention activation
-  max_tokens: 16384          # Extended context support
-  output_dimension: 1024     # Optional PCA downprojection
+  embedding_name: Qwen/Qwen3-Embedding-8B    # Auto-detected for direct transformers
+  dtype: "bfloat16"                           # Optimal precision for RTX 5090/A100
+  use_flash_attention: true                   # Automatic flash attention activation
+  max_tokens: 16384                          # Extended context support (up to 32k)
+  output_dimension: 1024                     # Optional Matryoshka downprojection
 ```
 
-**Key Benefits:**
+**🔍 Automatic Model Detection:**
+- **Qwen Embedding models** (`qwen` + `embedding` in name): Direct transformers
+- **Standard models** (BGE, E5, sentence-transformers): Sentence-transformers wrapper
+- **Zero configuration needed**: The service intelligently chooses the best approach
+
+**🚀 Key Benefits:**
 - **🎯 Native Performance**: Direct PyTorch operations without sentence-transformers overhead
-- **⚡ Flash Attention**: Up to 2-4x speedup on supported hardware
+- **⚡ Flash Attention**: Up to 2-4x speedup on supported hardware (RTX 4090/5090, A100)
 - **💾 Memory Efficiency**: bfloat16 reduces memory usage by ~50%
-- **📏 Flexible Context**: Support for up to 32k tokens on high-end GPUs
-- **📐 Dimension Control**: On-the-fly PCA for reduced storage requirements
+- **📏 Flexible Context**: Support for up to 32k tokens on high-end GPUs (16k recommended)
+- **📐 Matryoshka Downprojection**: Stable dimensionality reduction preserving prefix dimensions
+- **🔧 Advanced Optimizations**: TF32 matmul, high precision settings, inference mode
 
 ### Precision & Performance Settings
 
@@ -376,12 +385,17 @@ model:
 
 ### Model Compatibility Matrix
 
-| Model Type | Integration | Flash Attention | Optimal dtype |
-|------------|-------------|-----------------|---------------|
-| `Qwen/Qwen3-Embedding-8B` | Direct transformers | ✅ | bfloat16 |
-| `BAAI/bge-*` | SentenceTransformers | ✅ | bfloat16 |
-| `intfloat/e5-*` | SentenceTransformers | ✅ | bfloat16 |
-| `sentence-transformers/*` | SentenceTransformers | ⚠️ | float16 |
+| Model Type | Integration | Auto-Detection | Flash Attention | Optimal dtype | Max Context |
+|------------|-------------|----------------|-----------------|---------------|-------------|
+| `Qwen/Qwen3-Embedding-8B` | Direct transformers | ✅ Auto | ✅ | bfloat16 | 32k tokens |
+| `Qwen/Qwen3-Embedding-4B` | Direct transformers | ✅ Auto | ✅ | bfloat16 | 32k tokens |
+| `BAAI/bge-*` | SentenceTransformers | ✅ Auto | ✅ | bfloat16 | 512 tokens |
+| `intfloat/e5-*` | SentenceTransformers | ✅ Auto | ✅ | bfloat16 | 512 tokens |
+| `sentence-transformers/*` | SentenceTransformers | ✅ Auto | ⚠️ | float16 | 512 tokens |
+
+**Detection Logic:**
+- Models with `qwen` + `embedding` in name → Direct transformers with extended features
+- All other models → Standard sentence-transformers wrapper
 
 ## 🔧 Advanced Configuration
 
@@ -410,23 +424,35 @@ model:
 **Advanced Model Examples:**
 
 ```yaml
-# For Qwen family models
+# For Qwen family models (auto-detected for direct transformers)
 model:
   embedding_name: Qwen/Qwen3-Embedding-8B
-  dtype: "bfloat16"
-  max_tokens: 16384
+  dtype: "bfloat16"                    # Optimal for modern GPUs
+  use_flash_attention: true            # Auto-enabled for performance
+  max_tokens: 16384                    # Extended context (up to 32k)
+  output_dimension: 1024               # Optional Matryoshka downprojection
 
-# For multilingual E5 models
+# For multilingual E5 models (auto-detected for sentence-transformers)
 model:
   embedding_name: intfloat/multilingual-e5-large
   dtype: "bfloat16"
   max_tokens: 512
+  normalize_embeddings: true
 
-# For BGE models with flash attention
+# For BGE models with flash attention (auto-detected)
 model:
   cross_name: BAAI/bge-reranker-v2-m3
   embedding_name: BAAI/bge-m3
   use_flash_attention: true
+  dtype: "bfloat16"
+
+# Mixed setup: Advanced embedding + Standard reranking
+model:
+  mode: cross
+  cross_name: BAAI/bge-reranker-v2-m3      # Sentence-transformers
+  embedding_name: Qwen/Qwen3-Embedding-8B  # Direct transformers
+  dtype: "bfloat16"
+  max_tokens: 16384
 ```
 
 ### Performance Tuning
@@ -518,6 +544,61 @@ response = requests.post('http://localhost:8000/v1/rerank',
 )
 print(response.json())
 "
+```
+
+## 🏷️ Version Management
+
+The service includes a built-in version management system that displays version information across all interfaces.
+
+### Version Display
+
+- **Startup Banner**: Version appears in the boot summary header
+- **API Endpoints**: Both `/v1/config` and `/v1/diagnostics` include version information
+- **Version Manager Script**: Comprehensive version management tool
+
+### Using the Version Manager
+
+```bash
+# Show current version
+python version_manager.py current
+
+# Bump version (patch: 1.0.0 → 1.0.1)
+python version_manager.py bump patch
+
+# Bump minor version (1.0.0 → 1.1.0)
+python version_manager.py bump minor
+
+# Bump major version (1.0.0 → 2.0.0)
+python version_manager.py bump major
+
+# Set specific version
+python version_manager.py set 2.1.3
+
+# With custom commit message
+python version_manager.py bump patch -m "fix: resolve authentication issue"
+```
+
+### API Version Information
+
+**GET `/v1/config`** response includes:
+```json
+{
+  "version": "1.0.0",
+  "model": { ... },
+  "huggingface": { ... },
+  "server": { ... }
+}
+```
+
+**GET `/v1/diagnostics`** response includes:
+```json
+{
+  "version": "1.0.0",
+  "python": "...",
+  "torch_cuda_available": true,
+  "huggingface": { ... },
+  "models_loaded": [...]
+}
 ```
 
 ## 📝 Troubleshooting

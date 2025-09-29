@@ -6,11 +6,11 @@ model:
   batch_size_bi: 64
   normalize_embeddings: true
   trust_remote_code: true
-  # Options avancées pour modèles Transformers direct (Qwen)
-  dtype: "bfloat16"             # bf16 recommandé sur RTX 5090
-  use_flash_attention: true     # si flash-attn dispo, sinon ignoré
-  max_tokens: 16384             # 16k safe sur 5090; 32k possible mais réduire batch
-  output_dimension: 1536        # ex. 1024 (down-projection PCA). Laisser null sinon.
+  # Advanced options for direct Transformers models (Qwen)
+  dtype: "bfloat16"             # bf16 recommended on RTX 5090
+  use_flash_attention: true     # if flash-attn available, otherwise ignored
+  max_tokens: 16384             # 16k safe on 5090; 32k possible but reduce batch
+  output_dimension: 1536        # e.g. 1024 (PCA down-projection). Leave null otherwise.
 
 huggingface:
   token: null
@@ -29,10 +29,10 @@ server:
   warmup:
     enabled: true
     load:
-      cross: true       # charge le cross-encoder (reranker)
-      bi: false         # charge le bi-encoder (si tu utilises le mode "bi")
-      embedding: false   # charge le modèle d'embedding utilisé par /v1/encode
-    texts: ["warmup", "échauffement"]  # petits textes pour un « forward »
+      cross: true       # load the cross-encoder (reranker)
+      bi: false         # load the bi-encoder (if using "bi" mode)
+      embedding: false   # load the embedding model used by /v1/encode
+    texts: ["warmup", "test"]  # small texts for a forward pass
 
 logging:
   level: DEBUG

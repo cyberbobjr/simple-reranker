@@ -24,10 +24,10 @@ server:
   warmup:
     enabled: true
     load:
-      cross: true       # charge le cross-encoder (reranker)
-      bi: false         # charge le bi-encoder (si tu utilises le mode "bi")
-      embedding: false   # charge le modèle d'embedding utilisé par /v1/encode
-    texts: ["warmup", "échauffement"]  # petits textes pour un « forward »
+      cross: true       # load the cross-encoder (reranker)
+      bi: false         # load the bi-encoder (if using "bi" mode)
+      embedding: false   # load the embedding model used by /v1/encode
+    texts: ["warmup", "test"]  # small texts for a forward pass
 
 logging:
   level: INFO
