@@ -27,8 +27,8 @@ def create_embedding_routes(embedding_service: EmbeddingService, require_api_key
                 return input_data
             elif isinstance(input_data[0], list) and all(isinstance(token, int) for token in input_data[0]):
                 # Handle tokenized input - convert back to string representation
-                # This is a simplified approach; in practice you'd need a tokenizer
-                return [" ".join(map(str, tokens)) for tokens in input_data]
+                # Proper decoding requires a tokenizer, which is not available here.
+                raise ValueError("Tokenized input (list of token IDs) is not supported without a tokenizer.")
             else:
                 raise ValueError("Invalid input format")
         else:

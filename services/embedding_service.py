@@ -48,7 +48,7 @@ class EmbeddingService:
         the most useful information.
         """
         if vecs.ndim != 2:
-            raise ValueError(f"Expected 2D tensor (B, D), got shape {tuple(vecs.shape)}")
+            raise ValueError(f"Expected 2D tensor (B, D), got shape {vecs.shape}")
 
         B, D = vecs.shape
         if not out_dim or out_dim >= D:

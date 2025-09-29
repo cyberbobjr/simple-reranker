@@ -7,6 +7,13 @@ import logging
 from typing import Any, Dict
 from huggingface_hub import snapshot_download, login as hf_login
 
+# Try to import cache checking function
+try:
+    from huggingface_hub import try_to_load_from_cache
+    HAS_CACHE_CHECK = True
+except ImportError:
+    HAS_CACHE_CHECK = False
+
 
 class Config:
     """Configuration manager for the reranker service."""
@@ -184,21 +191,21 @@ class Config:
                 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 
                 # Check if model is already downloaded
-                try:
-                    from huggingface_hub import try_to_load_from_cache
-                    cached_path = try_to_load_from_cache(repo_id=repo, filename="config.json")
-                    if cached_path is not None:
-                        logger.info("boot_prefetch_cached", extra={"extra":{
-                            "repo": repo,
-                            "progress": f"{i}/{len(prefetch_repos)}",
-                            "status": "already_cached"
-                        }})
-                        # Still get the path for consistency
-                        path = snapshot_download(repo_id=repo, token=token, local_files_only=True)
-                        downloaded.append((repo, path))
-                        continue
-                except Exception:
-                    pass  # Not cached, continue with download
+                if HAS_CACHE_CHECK:
+                    try:
+                        cached_path = try_to_load_from_cache(repo_id=repo, filename="config.json")
+                        if cached_path is not None:
+                            logger.info("boot_prefetch_cached", extra={"extra":{
+                                "repo": repo,
+                                "progress": f"{i}/{len(prefetch_repos)}",
+                                "status": "already_cached"
+                            }})
+                            # Still get the path for consistency
+                            path = snapshot_download(repo_id=repo, token=token, local_files_only=True)
+                            downloaded.append((repo, path))
+                            continue
+                    except Exception:
+                        pass  # Cache check failed, continue with download
 
                 logger.info("boot_prefetch_downloading_files", extra={"extra":{
                     "repo": repo,
