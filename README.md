@@ -7,6 +7,10 @@ A high-performance FastAPI-based reranking and embedding service with Cohere-com
 - **🔄 Multiple Reranking Modes**: Cross-encoder and bi-encoder support
 - **🌍 Multilingual Support**: Built-in support for multilingual models
 - **⚡ High Performance**: Optimized batch processing and model caching
+- **🚀 Direct Transformers Support**: Advanced models like Qwen3-Embedding-8B with native transformers
+- **⚡ Flash Attention**: Automatic flash attention activation for supported models
+- **🎯 Precision Control**: bfloat16/float16 support for optimal GPU performance
+- **📐 PCA Downprojection**: Optional on-the-fly dimensionality reduction
 - **🔌 Cohere-Compatible API**: Drop-in replacement for Cohere rerank API
 - **🛡️ Security**: API key authentication and CORS configuration
 - **📊 Monitoring**: Comprehensive logging and diagnostics endpoints
@@ -90,6 +94,8 @@ A high-performance FastAPI-based reranking and embedding service with Cohere-com
 
 ### Starting the Service
 
+> ⚠️ **Important**: Configuration file is REQUIRED. The service will not start without a valid YAML configuration.
+
 #### Server Mode (API)
 
 ```bash
@@ -108,6 +114,21 @@ python rerank_service.py --config rerank_config.yaml \
 echo -e "document 1\ndocument 2" | \
 python rerank_service.py --config rerank_config.yaml \
   --query "search query" --candidates -
+```
+
+#### Configuration Validation
+
+The service provides helpful error messages for common configuration issues:
+
+```bash
+# Missing config file
+python rerank_service.py --serve
+# ❌ ERROR: the following arguments are required: --config/-c
+
+# Wrong file type
+python rerank_service.py --config rerank_service.py --serve
+# ❌ ERROR: You specified a Python file as configuration
+# 💡 Fix: Use the YAML configuration file instead: --config rerank_config.yaml
 ```
 
 ### API Usage Examples
@@ -211,19 +232,25 @@ curl -X POST "http://localhost:8000/v1/encode" \
 model:
   # Reranking mode: "cross" (cross-encoder) or "bi" (bi-encoder)
   mode: cross
-  
+
   # Model names from Hugging Face
-  cross_name: BAAI/bge-reranker-v2-m3      # Cross-encoder for reranking
+  cross_name: BAAI/bge-reranker-v2-m3         # Cross-encoder for reranking
   bi_name: sentence-transformers/all-MiniLM-L6-v2  # Bi-encoder (alternative)
-  embedding_name: intfloat/multilingual-e5-base    # Embedding model for /v1/encode
-  
+  embedding_name: Qwen/Qwen3-Embedding-8B     # Advanced embedding model for /v1/encode
+
   # Batch processing settings
   batch_size_cross: 32    # Batch size for cross-encoder
   batch_size_bi: 64       # Batch size for bi-encoder
-  
+
   # Model behavior
   normalize_embeddings: true    # Normalize embedding vectors
   trust_remote_code: true       # Allow custom model code execution
+
+  # Advanced options for direct transformers models (Qwen3, etc.)
+  dtype: "bfloat16"             # Precision: bfloat16, float16, float32 (bfloat16 recommended for RTX 5090)
+  use_flash_attention: true     # Enable flash attention if available (significant speedup)
+  max_tokens: 16384             # Maximum context length (16k safe on RTX 5090, 32k possible)
+  output_dimension: null        # Optional PCA downprojection (e.g. 1024 for dimension reduction)
 ```
 
 ### Hugging Face Configuration
@@ -239,7 +266,7 @@ huggingface:
   
   # Pre-download models on startup
   prefetch:
-    - sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+    - Qwen/Qwen3-Embedding-8B
     - BAAI/bge-reranker-v2-m3
 ```
 
@@ -314,6 +341,48 @@ curl -H "Authorization: Bearer your-key" \
   http://localhost:8000/v1/config
 ```
 
+## 🚀 Advanced Features & Optimizations
+
+### Direct Transformers Integration
+
+The service automatically detects and optimizes advanced embedding models like **Qwen3-Embedding-8B** that require direct transformers integration:
+
+```yaml
+model:
+  embedding_name: Qwen/Qwen3-Embedding-8B
+  dtype: "bfloat16"           # Optimal precision for RTX 5090
+  use_flash_attention: true   # Automatic flash attention activation
+  max_tokens: 16384          # Extended context support
+  output_dimension: 1024     # Optional PCA downprojection
+```
+
+**Key Benefits:**
+- **🎯 Native Performance**: Direct PyTorch operations without sentence-transformers overhead
+- **⚡ Flash Attention**: Up to 2-4x speedup on supported hardware
+- **💾 Memory Efficiency**: bfloat16 reduces memory usage by ~50%
+- **📏 Flexible Context**: Support for up to 32k tokens on high-end GPUs
+- **📐 Dimension Control**: On-the-fly PCA for reduced storage requirements
+
+### Precision & Performance Settings
+
+| Setting | Options | Best For | Memory Impact |
+|---------|---------|----------|---------------|
+| `dtype` | `bfloat16` | RTX 4090/5090, A100 | -50% |
+| `dtype` | `float16` | Older GPUs, mobile | -50% |
+| `dtype` | `float32` | CPU, compatibility | baseline |
+| `use_flash_attention` | `true` | Modern GPUs | +speed, -memory |
+| `max_tokens` | `16384` | Standard use | baseline |
+| `max_tokens` | `32768` | Long documents | +2x memory |
+
+### Model Compatibility Matrix
+
+| Model Type | Integration | Flash Attention | Optimal dtype |
+|------------|-------------|-----------------|---------------|
+| `Qwen/Qwen3-Embedding-8B` | Direct transformers | ✅ | bfloat16 |
+| `BAAI/bge-*` | SentenceTransformers | ✅ | bfloat16 |
+| `intfloat/e5-*` | SentenceTransformers | ✅ | bfloat16 |
+| `sentence-transformers/*` | SentenceTransformers | ⚠️ | float16 |
+
 ## 🔧 Advanced Configuration
 
 ### Environment Variables
@@ -332,24 +401,78 @@ You can use any compatible Hugging Face model:
 model:
   cross_name: your-org/custom-reranker
   embedding_name: your-org/custom-embedder
+  # For advanced models requiring direct transformers:
+  dtype: "bfloat16"
+  use_flash_attention: true
+  max_tokens: 8192
+```
+
+**Advanced Model Examples:**
+
+```yaml
+# For Qwen family models
+model:
+  embedding_name: Qwen/Qwen3-Embedding-8B
+  dtype: "bfloat16"
+  max_tokens: 16384
+
+# For multilingual E5 models
+model:
+  embedding_name: intfloat/multilingual-e5-large
+  dtype: "bfloat16"
+  max_tokens: 512
+
+# For BGE models with flash attention
+model:
+  cross_name: BAAI/bge-reranker-v2-m3
+  embedding_name: BAAI/bge-m3
+  use_flash_attention: true
 ```
 
 ### Performance Tuning
 
-**For High Memory Systems:**
+**For High-End GPUs (RTX 5090, A100):**
 
 ```yaml
 model:
   batch_size_cross: 64
   batch_size_bi: 128
+  dtype: "bfloat16"
+  use_flash_attention: true
+  max_tokens: 16384
 ```
 
-**For Limited Memory:**
+**For Mid-Range GPUs (RTX 4080, RTX 3090):**
 
 ```yaml
 model:
-  batch_size_cross: 8
-  batch_size_bi: 16
+  batch_size_cross: 32
+  batch_size_bi: 64
+  dtype: "bfloat16"
+  use_flash_attention: true
+  max_tokens: 8192
+```
+
+**For Limited Memory (RTX 3070, RTX 4060):**
+
+```yaml
+model:
+  batch_size_cross: 16
+  batch_size_bi: 32
+  dtype: "float16"
+  use_flash_attention: false
+  max_tokens: 4096
+```
+
+**For CPU or Very Limited GPU:**
+
+```yaml
+model:
+  batch_size_cross: 4
+  batch_size_bi: 8
+  dtype: "float32"
+  use_flash_attention: false
+  max_tokens: 1024
 ```
 
 ## 🐳 Container Deployment

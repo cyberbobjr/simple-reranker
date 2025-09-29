@@ -1,24 +1,19 @@
 model:
   mode: cross
   cross_name: BAAI/bge-reranker-v2-m3
-  embedding_name: Qwen/Qwen3-Embedding-8B
+  embedding_name: intfloat/multilingual-e5-base
   batch_size_cross: 32
   batch_size_bi: 64
   normalize_embeddings: true
   trust_remote_code: true
-  # Options avancées pour modèles Transformers direct (Qwen)
-  dtype: "bfloat16"             # bf16 recommandé sur RTX 5090
-  use_flash_attention: true     # si flash-attn dispo, sinon ignoré
-  max_tokens: 16384             # 16k safe sur 5090; 32k possible mais réduire batch
-  output_dimension: 1536        # ex. 1024 (down-projection PCA). Laisser null sinon.
 
 huggingface:
   token: null
   cache_dir: null
   model_dir: /app/models
   prefetch:
-    - Qwen/Qwen3-Embedding-8B
-    - BAAI/bge-reranker-v2-m3t
+    - sentence-transformers/paraphrase-multilingual-mpnet-base-v2
+    - BAAI/bge-reranker-v2-m3
 
 server:
   host: 0.0.0.0
@@ -35,6 +30,6 @@ server:
     texts: ["warmup", "échauffement"]  # petits textes pour un « forward »
 
 logging:
-  level: DEBUG
+  level: INFO
   format: json    # json or text
   file: null      # null -> stdout (container logs)
