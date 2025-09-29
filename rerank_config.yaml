@@ -18,7 +18,7 @@ huggingface:
   model_dir: /app/models
   prefetch:
     - Qwen/Qwen3-Embedding-8B
-    - BAAI/bge-reranker-v2-m3t
+    - BAAI/bge-reranker-v2-m3
 
 server:
   host: 0.0.0.0
