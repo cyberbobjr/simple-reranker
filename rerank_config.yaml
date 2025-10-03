@@ -31,10 +31,10 @@ server:
     load:
       cross: true       # load the cross-encoder (reranker)
       bi: false         # load the bi-encoder (if using "bi" mode)
-      embedding: false   # load the embedding model used by /v1/encode
+      embedding: true   # load the embedding model used by /v1/encode
     texts: ["warmup", "test"]  # small texts for a forward pass
 
 logging:
   level: DEBUG
   format: json    # json or text
-  file: null      # null -> stdout (container logs)
+  file: /logs/rerank.log      # null -> stdout (container logs)

@@ -90,17 +90,32 @@ class EmbeddingService:
                     batch_size=len(texts),
                     normalize_embeddings=False
                 )
-                return torch.as_tensor(vecs, device=device, dtype=dtype)
+                result = torch.as_tensor(vecs, device=device, dtype=dtype)
+                del vecs
+                return result
         except Exception:
             pass
 
         # Fallback: tokenizer + forward + mean pooling
         enc = tokenizer(texts, padding=True, truncation=True, max_length=max_tokens, return_tensors="pt").to(device)
-        with torch.inference_mode():
-            out = model(**enc)
-            last = out.last_hidden_state
-            vecs = self._mean_pool(last, enc["attention_mask"])
-        return vecs
+        try:
+            with torch.inference_mode():
+                out = model(**enc)
+                last = out.last_hidden_state
+                vecs = self._mean_pool(last, enc["attention_mask"])
+                # Create a contiguous copy to allow cleanup
+                result = vecs.contiguous()
+                return result
+        finally:
+            # Explicit cleanup of intermediate tensors
+            del enc
+            if 'out' in locals():
+                del out
+            if 'last' in locals():
+                del last
+            if 'vecs' in locals():
+                del vecs
+            torch.cuda.empty_cache()
 
     def get_embedding_encoder(self, name: str, trust_remote_code: bool = True):
         """Return an embedding encoder, either SentenceTransformer or direct Transformers."""
@@ -177,26 +192,42 @@ class EmbeddingService:
         enc = self.get_embedding_encoder(chosen, trust_remote_code=trc)
 
         if enc["type"] == "transformers":
-            # Direct Transformers model (Qwen3-Embedding-8B)
-            embs_tensor = self._encode_batch_transformers(
-                texts,
-                enc["tokenizer"],
-                enc["model"],
-                max_tokens=enc["max_tokens"],
-                device=enc["device"],
-                dtype=enc["dtype"]
-            )
+            try:
+                # Direct Transformers model (Qwen3-Embedding-8B)
+                embs_tensor = self._encode_batch_transformers(
+                    texts,
+                    enc["tokenizer"],
+                    enc["model"],
+                    max_tokens=enc["max_tokens"],
+                    device=enc["device"],
+                    dtype=enc["dtype"]
+                )
 
-            # Apply PCA down-projection if configured
-            output_dim = enc["output_dimension"]
-            if output_dim:
-                embs_tensor = self._mrl_downproject(embs_tensor, int(output_dim))
+                # Apply PCA down-projection if configured
+                output_dim = enc["output_dimension"]
+                if output_dim:
+                    projected = self._mrl_downproject(embs_tensor, int(output_dim))
+                    del embs_tensor
+                    embs_tensor = projected
 
-            # Normalization
-            if normalize:
-                embs_tensor = self._normalize(embs_tensor)
+                # Normalization
+                if normalize:
+                    normalized = self._normalize(embs_tensor)
+                    del embs_tensor
+                    embs_tensor = normalized
 
-            embs = embs_tensor.float().cpu().numpy()
+                # Move to CPU and convert to numpy
+                embs = embs_tensor.float().cpu().numpy()
+
+                # Explicit cleanup
+                del embs_tensor
+                torch.cuda.empty_cache()
+            except Exception as e:
+                # Ensure cleanup even on error
+                if 'embs_tensor' in locals():
+                    del embs_tensor
+                torch.cuda.empty_cache()
+                raise e
         else:
             # Standard SentenceTransformer
             embs = enc["model"].encode(texts, batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=normalize, show_progress_bar=False)
@@ -212,7 +243,7 @@ class EmbeddingService:
 
             if enc["type"] == "transformers":
                 # Warmup for direct Transformers model
-                _ = self._encode_batch_transformers(
+                result = self._encode_batch_transformers(
                     texts,
                     enc["tokenizer"],
                     enc["model"],
@@ -220,6 +251,9 @@ class EmbeddingService:
                     device=enc["device"],
                     dtype=enc["dtype"]
                 )
+                # Cleanup warmup tensors
+                del result
+                torch.cuda.empty_cache()
             else:
                 # Warmup for SentenceTransformer
                 norm = bool(mcfg.get("normalize_embeddings", True))
@@ -227,4 +261,5 @@ class EmbeddingService:
                 _ = enc["model"].encode(texts, batch_size=bs_bi, convert_to_numpy=True, normalize_embeddings=norm, show_progress_bar=False)
             return True
         except Exception:
+            torch.cuda.empty_cache()
             return False
