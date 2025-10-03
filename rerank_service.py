@@ -39,7 +39,13 @@ def _setup_logging(cfg: Dict[str, Any]) -> logging.Logger:
     logger.setLevel(level)
     if logger.handlers:
         return logger
-    handler = logging.FileHandler(file_path) if file_path else logging.StreamHandler()
+    if file_path:
+        import pathlib
+        log_dir = pathlib.Path(file_path).parent
+        log_dir.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(file_path)
+    else:
+        handler = logging.StreamHandler()
     if fmt_mode == "json":
         class JsonFormatter(logging.Formatter):
             def format(self, record):
