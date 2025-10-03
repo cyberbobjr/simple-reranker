@@ -253,7 +253,7 @@ model:
   dtype: "bfloat16"             # Precision: bfloat16, float16, float32 (bfloat16 recommended for RTX 5090/A100)
   use_flash_attention: true     # Enable flash attention if available (2-4x speedup on modern GPUs)
   max_tokens: 16384             # Maximum context length (16k recommended, 32k possible on high-end GPUs)
-  output_dimension: null        # Optional Matryoshka downprojection (e.g. 1024 for stable dimension reduction)
+  output_dimension: 1536        # e.g. 1024 (PCA down-projection). Leave null otherwise.
 ```
 
 ### Hugging Face Configuration
