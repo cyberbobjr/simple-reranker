@@ -57,6 +57,12 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Clean up unused packages and Docker images
+        run: |
+          sudo apt-get clean
+          docker system prune -af
+          rm -rf /usr/local/share/boost /usr/share/dotnet /opt/ghc
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5

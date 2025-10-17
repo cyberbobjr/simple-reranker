@@ -614,6 +614,26 @@ git commit -m "perf: optimize batch processing"
 git commit -m "docs: update API documentation"
 ```
 
+**AI-Powered Commit Messages with Claude Code:**
+
+Use the `/commit` slash command to automatically generate conventional commit messages:
+
+```bash
+# Stage your changes
+git add .
+
+# In Claude Code, use the slash command
+/commit
+```
+
+Claude Code will:
+1. Analyze your git diff
+2. Generate a properly formatted conventional commit message
+3. Explain what changes it captures
+4. Ask for confirmation and create the commit
+
+This ensures all your commits follow the conventional format and will be correctly categorized in the auto-generated changelog.
+
 ### API Version Information
 
 **GET `/v1/config`** response includes:
