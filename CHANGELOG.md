@@ -5,6 +5,11 @@ All notable changes to the Reranking & Embedding Service will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-10-17
+
+### Added
+- Implement RerankService for document reranking with cross-encoder and bi-encoder support
+
 ## [Unreleased]
 
 ### Added
