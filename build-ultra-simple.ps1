@@ -11,10 +11,24 @@ try {
     exit 1
 }
 
-# Build de l'image
-$ImageName = 'nwai-reranker:latest'
+# Lire la version depuis version.py
+function Get-Version {
+    $VersionFile = "version.py"
+    if (Test-Path $VersionFile) {
+        $Content = Get-Content $VersionFile
+        $VersionLine = $Content | Where-Object { $_ -match '__version__\s*=\s*"([^"]+)"' }
+        if ($VersionLine) {
+            return $Matches[1]
+        }
+    }
+    Write-Warning "Impossible de lire la version depuis $VersionFile, utilisation de 'latest'"
+    return "latest"
+}
 
-Write-Host "Construction de l'image $ImageName..." -ForegroundColor Blue
+$Version = Get-Version
+$ImageName = "nwai-reranker:$Version"
+
+Write-Host "Construction de l'image $ImageName (version $Version)..." -ForegroundColor Blue
 
 $env:BUILDAH_FORMAT = 'docker'
 

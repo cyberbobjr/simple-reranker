@@ -24,17 +24,6 @@ class EmbeddingService:
         """Normalize tensor using L2 normalization."""
         return torch.nn.functional.normalize(x, p=2, dim=-1)
 
-    def _pca_downproject(self, vecs: torch.Tensor, out_dim: Optional[int]) -> torch.Tensor:
-        """Down-projection PCA on-the-fly (batch-local). For prod: train PCA/OPQ offline."""
-        if not out_dim or out_dim >= vecs.shape[-1]:
-            return vecs
-        mu = vecs.mean(dim=0, keepdim=True)
-        X = (vecs - mu).float().cpu()
-        U, S, Vt = torch.linalg.svd(X, full_matrices=False)
-        W = Vt[:out_dim, :].t().contiguous()  # (D, out_dim)
-        Y = (X @ W).to(vecs.dtype)
-        return Y.to(vecs.device)
-
     def _mrl_downproject(self, vecs: torch.Tensor, out_dim: Optional[int]) -> torch.Tensor:
         """
         Matryoshka (MRL) down-projection: preserves the PREFIX of dimensions.
@@ -85,6 +74,8 @@ class EmbeddingService:
         # Try encode() method first if available
         try:
             with torch.inference_mode():
+                if not hasattr(model, "encode"):
+                    raise RuntimeError("Model has no .encode(); choose one path consistently.")
                 vecs = model.encode(
                     texts,
                     batch_size=len(texts),
