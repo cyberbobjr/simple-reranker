@@ -1,0 +1,100 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  DOCKER_IMAGE: cyberbobjr/reranking
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Extract version from version.py
+        id: get_version
+        run: |
+          VERSION=$(python -c "import re; content = open('version.py').read(); match = re.search(r'__version__\s*=\s*\"([^\"]+)\"', content); print(match.group(1) if match else 'latest')")
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+          echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog for current version
+        id: changelog
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            # Extract changelog section for current version (including the version line)
+            CHANGELOG=$(sed -n "/## \[${{ steps.get_version.outputs.VERSION }}\]/,/## \[/p" CHANGELOG.md | sed '$ {/^## \[/d;}')
+            if [ -z "$CHANGELOG" ]; then
+              CHANGELOG="See full changelog at CHANGELOG.md"
+            fi
+          else
+            CHANGELOG="Docker image built and pushed successfully."
+          fi
+          # Multi-line output handling for GitHub Actions
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:${{ steps.get_version.outputs.VERSION }}
+            ${{ env.DOCKER_IMAGE }}:latest
+          cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache,mode=max
+
+      - name: Image digest
+        run: echo "Image pushed successfully with tags ${{ steps.get_version.outputs.VERSION }} and latest"
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.TAG_NAME }}
+          body: |
+            ## Docker Image
+
+            ```bash
+            docker pull ${{ env.DOCKER_IMAGE }}:${{ steps.get_version.outputs.VERSION }}
+            docker pull ${{ env.DOCKER_IMAGE }}:latest
+            ```
+
+            ---
+
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ---
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

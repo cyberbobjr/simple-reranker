@@ -1,5 +1,9 @@
 # 🚀 Reranking & Embedding Service
 
+[![Docker Build](https://github.com/cyberbobjr/simple-reranker/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/cyberbobjr/simple-reranker/actions/workflows/docker-build-push.yml)
+[![Docker Hub](https://img.shields.io/docker/v/cyberbobjr/reranking?label=docker&logo=docker)](https://hub.docker.com/r/cyberbobjr/reranking)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A high-performance FastAPI-based reranking and embedding service with Cohere-compatible endpoints. This service provides state-of-the-art text reranking and embedding capabilities using Hugging Face transformers models.
 
 ## ✨ Features
@@ -558,6 +562,8 @@ The service includes a built-in version management system that displays version 
 
 ### Using the Version Manager
 
+The version manager automatically generates CHANGELOG.md entries from your git commits using [Conventional Commits](https://www.conventionalcommits.org/) format.
+
 ```bash
 # Show current version
 python version_manager.py current
@@ -576,6 +582,36 @@ python version_manager.py set 2.1.3
 
 # With custom commit message
 python version_manager.py bump patch -m "fix: resolve authentication issue"
+```
+
+**What happens when you bump a version:**
+
+1. Updates `version.py` with the new version number
+2. **Automatically generates CHANGELOG.md entry** from git commits since last tag:
+   - `feat:` commits → Added section
+   - `fix:` commits → Fixed section
+   - `refactor:`, `perf:`, `docs:` commits → Changed section
+   - Uses today's date automatically
+3. Displays the generated changelog entry for review
+4. Provides git commands to commit, tag, and push
+
+**Commit Message Format:**
+
+To get properly categorized changelog entries, use conventional commit format:
+
+```bash
+# Feature (goes to "Added" section)
+git commit -m "feat: add dark mode support"
+git commit -m "feat(api): add new /v1/status endpoint"
+
+# Bug fix (goes to "Fixed" section)
+git commit -m "fix: resolve memory leak in model loader"
+git commit -m "fix(auth): correct token validation"
+
+# Other changes (go to "Changed" section)
+git commit -m "refactor: improve error handling"
+git commit -m "perf: optimize batch processing"
+git commit -m "docs: update API documentation"
 ```
 
 ### API Version Information

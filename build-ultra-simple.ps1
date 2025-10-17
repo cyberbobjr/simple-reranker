@@ -1,6 +1,6 @@
 # Script PowerShell simple - pas de caracteres speciaux
 
-Write-Host 'Building nwai-reranker Podman image...' -ForegroundColor Green
+Write-Host 'Building reranking Podman image...' -ForegroundColor Green
 
 # Verifier Podman
 try {
@@ -26,7 +26,7 @@ function Get-Version {
 }
 
 $Version = Get-Version
-$ImageName = "nwai-reranker:$Version"
+$ImageName = "cyberbobjr/reranking:$Version"
 
 Write-Host "Construction de l'image $ImageName (version $Version)..." -ForegroundColor Blue
 

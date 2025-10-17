@@ -4,3 +4,4 @@ rerank_config.yaml
 server.log
 .devcontainer/
 .vscode/
+.env

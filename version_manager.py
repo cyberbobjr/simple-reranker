@@ -7,8 +7,10 @@ Version Manager - Version management for Reranking & Embedding Service
 import argparse
 import os
 import re
+import subprocess
 import sys
-from typing import Tuple
+from datetime import date
+from typing import List, Tuple
 
 
 def get_current_version() -> Tuple[int, int, int]:
@@ -85,7 +87,168 @@ def print_current_version():
     return version_string
 
 
-def print_git_commands(version_string: str, commit_message: str = None):
+def get_latest_tag() -> str:
+    """Get the latest git tag"""
+    try:
+        result = subprocess.run(
+            ['git', 'describe', '--tags', '--abbrev=0'],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        return None
+    except Exception:
+        return None
+
+
+def get_commits_since_tag(tag: str = None) -> List[str]:
+    """Get commit messages since the last tag (or all commits if no tag)"""
+    try:
+        if tag:
+            cmd = ['git', 'log', f'{tag}..HEAD', '--pretty=format:%s']
+        else:
+            cmd = ['git', 'log', '--pretty=format:%s']
+
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        commits = result.stdout.strip().split('\n')
+        return [c for c in commits if c]
+    except Exception as e:
+        print(f"⚠️  Unable to get git commits: {e}")
+        return []
+
+
+def categorize_commits(commits: List[str]) -> dict:
+    """Categorize commits by type (feat, fix, chore, etc.)"""
+    categories = {
+        'Added': [],
+        'Changed': [],
+        'Fixed': [],
+        'Deprecated': [],
+        'Removed': [],
+        'Security': []
+    }
+
+    for commit in commits:
+        # Parse conventional commits format
+        if commit.startswith('feat:') or commit.startswith('feat('):
+            msg = re.sub(r'^feat(\([^)]+\))?:\s*', '', commit)
+            categories['Added'].append(msg)
+        elif commit.startswith('fix:') or commit.startswith('fix('):
+            msg = re.sub(r'^fix(\([^)]+\))?:\s*', '', commit)
+            categories['Fixed'].append(msg)
+        elif commit.startswith('refactor:') or commit.startswith('refactor('):
+            msg = re.sub(r'^refactor(\([^)]+\))?:\s*', '', commit)
+            categories['Changed'].append(msg)
+        elif commit.startswith('perf:') or commit.startswith('perf('):
+            msg = re.sub(r'^perf(\([^)]+\))?:\s*', '', commit)
+            categories['Changed'].append(msg)
+        elif commit.startswith('docs:') or commit.startswith('docs('):
+            msg = re.sub(r'^docs(\([^)]+\))?:\s*', '', commit)
+            categories['Changed'].append(msg)
+        elif commit.startswith('style:') or commit.startswith('style('):
+            msg = re.sub(r'^style(\([^)]+\))?:\s*', '', commit)
+            categories['Changed'].append(msg)
+        elif commit.startswith('chore:') or commit.startswith('chore('):
+            # Skip chore commits unless they're important
+            if 'deprecat' in commit.lower():
+                msg = re.sub(r'^chore(\([^)]+\))?:\s*', '', commit)
+                categories['Deprecated'].append(msg)
+        elif commit.startswith('security:') or 'security' in commit.lower():
+            msg = re.sub(r'^security(\([^)]+\))?:\s*', '', commit)
+            categories['Security'].append(msg)
+        elif not commit.startswith('chore'):
+            # Uncategorized commits go to Changed
+            categories['Changed'].append(commit)
+
+    # Remove empty categories
+    return {k: v for k, v in categories.items() if v}
+
+
+def generate_changelog_entry(version: str, commits: List[str]) -> str:
+    """Generate a changelog entry from commits"""
+    today = date.today().strftime("%Y-%m-%d")
+    categories = categorize_commits(commits)
+
+    if not categories:
+        print("⚠️  No commits found to generate changelog")
+        return None
+
+    entry = f"## [{version}] - {today}\n\n"
+
+    for category, items in categories.items():
+        entry += f"### {category}\n"
+        for item in items:
+            entry += f"- {item}\n"
+        entry += "\n"
+
+    return entry
+
+
+def update_changelog(version: str) -> bool:
+    """Update CHANGELOG.md with new version entry"""
+    changelog_path = "CHANGELOG.md"
+
+    # Get commits since last tag
+    last_tag = get_latest_tag()
+    print(f"📋 Last tag: {last_tag if last_tag else 'none (first release)'}")
+
+    commits = get_commits_since_tag(last_tag)
+    if not commits:
+        print("⚠️  No new commits found since last tag")
+        return False
+
+    print(f"📝 Found {len(commits)} commits since {last_tag if last_tag else 'repository creation'}")
+
+    # Generate changelog entry
+    new_entry = generate_changelog_entry(version, commits)
+    if not new_entry:
+        return False
+
+    # Read existing changelog or create new one
+    if os.path.exists(changelog_path):
+        with open(changelog_path, 'r') as f:
+            content = f.read()
+    else:
+        content = """# Changelog
+
+All notable changes to the Reranking & Embedding Service will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+"""
+
+    # Insert new entry after the header
+    lines = content.split('\n')
+    header_end = 0
+    for i, line in enumerate(lines):
+        if line.startswith('## '):
+            header_end = i
+            break
+
+    if header_end == 0:
+        # No existing versions, append at end
+        new_content = content.rstrip() + '\n\n' + new_entry
+    else:
+        # Insert before first version
+        new_content = '\n'.join(lines[:header_end]) + '\n' + new_entry + '\n'.join(lines[header_end:])
+
+    # Write updated changelog
+    with open(changelog_path, 'w') as f:
+        f.write(new_content)
+
+    print(f"✅ CHANGELOG.md updated with version {version}")
+    print(f"\n📄 Generated changelog entry:")
+    print(f"─" * 50)
+    print(new_entry)
+    print(f"─" * 50)
+
+    return True
+
+
+def print_git_commands(version_string: str, commit_message: str = None, changelog_updated: bool = False):
     """Display git commands to execute"""
     if not commit_message:
         commit_message = f"chore: bump version to v{version_string}"
@@ -95,7 +258,10 @@ def print_git_commands(version_string: str, commit_message: str = None):
     print(f"\n🔧 Git commands to execute:")
     print(f"─" * 50)
     print(f"# 1. Add changes")
-    print(f"git add version.py")
+    if changelog_updated:
+        print(f"git add version.py CHANGELOG.md")
+    else:
+        print(f"git add version.py")
     print(f"")
     print(f"# 2. Create commit")
     print(f'git commit -m "{commit_message}"')
@@ -184,7 +350,8 @@ Usage examples:
 
         # Update
         update_version_file(new_major, new_minor, new_patch)
-        print_git_commands(new_version, args.message)
+        changelog_updated = update_changelog(new_version)
+        print_git_commands(new_version, args.message, changelog_updated)
 
     elif args.command == 'set':
         # Validate version format
@@ -207,7 +374,8 @@ Usage examples:
 
         # Update
         update_version_file(new_major, new_minor, new_patch)
-        print_git_commands(args.version, args.message)
+        changelog_updated = update_changelog(args.version)
+        print_git_commands(args.version, args.message, changelog_updated)
 
 
 if __name__ == "__main__":
