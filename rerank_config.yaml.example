@@ -29,6 +29,15 @@ server:
       embedding: false   # load the embedding model used by /v1/encode
     texts: ["warmup", "test"]  # small texts for a forward pass
 
+security:
+  brute_force:
+    enabled: true
+    max_failures: 10          # Number of failed attempts allowed
+    window_seconds: 60        # Time window to count failures
+    ban_seconds: 300          # Ban duration (seconds) -> 5 minutes
+    ban_file: "/app/banned_ips.json" # MUST be an absolute path to store persistent bans
+    trust_proxy_headers: false # Set to true if behind a trusted reverse proxy (e.g. Nginx, Cloudflare)
+
 logging:
   level: INFO
   format: json    # json or text

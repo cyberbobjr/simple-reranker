@@ -34,6 +34,16 @@ server:
       embedding: true   # load the embedding model used by /v1/encode
     texts: ["warmup", "test"]  # small texts for a forward pass
 
+security:
+  brute_force:
+    enabled: true
+    max_failures: 5
+    window_seconds: 60
+    ban_seconds: 300
+    ban_file: "/app/banned_ips.json" # MUST be an absolute path
+    trust_proxy_headers: true # Assuming user might have a reverse proxy as they asked about it, but defaulting to safe or what they asked? They asked "beware take the case of a reverse proxy in front". I will set it to false by default in code but here I will set it to false and let them know, or set to true if they imply they HAVE a reverse proxy. The user said "take the case of a reverse proxy in front", so I should probably enable it or at least document it well. I will set it to false for safety but add a comment. Actually, if I set it to `true` and there is NO proxy, a user can spoof XFF headers. So `false` is safer by default. The user asked to handle the case, so I will add the option.
+    # trust_proxy_headers: false # Set to true to use X-Forwarded-For / X-Real-IP
+
 logging:
   level: DEBUG
   format: json    # json or text

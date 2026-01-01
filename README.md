@@ -320,6 +320,31 @@ logging:
 
 ### Production Deployment
 
+## 🛡️ Security
+
+### Brute Force Protection
+The service includes built-in protection against brute force attacks on API keys. This is configured in the `security` section of `rerank_config.yaml`.
+
+```yaml
+security:
+  brute_force:
+    enabled: true
+    max_failures: 10          # Number of failed attempts allowed
+    window_seconds: 60        # Time window to count failures
+    ban_seconds: 300          # Ban duration (seconds)
+    ban_file: "/app/banned_ips.json" # MUST be an absolute path to store persistent bans
+    trust_proxy_headers: false # Set to true if behind a trusted reverse proxy (e.g. Nginx)
+```
+
+**How it works:**
+- Tracks failed authentication attempts per IP.
+- detailed logs of failures and bans.
+- Temporarily bans IPs exceeding `max_failures` within `window_seconds`.
+- Returns `403 Forbidden` for banned IPs.
+- **Reverse Proxy**: If you run behind a reverse proxy (Nginx, Traefik, etc.), set `trust_proxy_headers: true` to correctly identify client IPs via `X-Forwarded-For` or `X-Real-IP`.
+
+### Production Recommendations
+
 - Use specific domains in `cors_origins` instead of `["*"]`
 - Generate strong, unique API keys
 - Consider using HTTPS reverse proxy (nginx, traefik)

@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import our core, services and routes
 from core.config import Config
+from core.security import BruteForceProtector
 from services.embedding_service import EmbeddingService
 from services.rerank_service import RerankService
 from routes.embedding import create_embedding_routes
@@ -365,13 +366,28 @@ def _load_allowed_keys(config: Config) -> set[str]:
 def make_api_key_dependency(config: Config):
     """Create API key dependency for FastAPI."""
     allowed_keys = _load_allowed_keys(config)
+    protector = BruteForceProtector(config)
+    
     async def require_api_key(
         request: Request,
         authorization: str | None = Header(default=None, alias="Authorization"),
         x_api_key: str | None = Header(default=None, alias="x-api-key"),
     ):
+        # 1. Check brute force protection first
+        protector.check_ip(request)
+
         if not allowed_keys:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key required")
+            # If no keys configured, define behavior (deny all or allow all? Original code raised 401)
+            # Original code:
+            # if not allowed_keys: raise HTTPException(...)
+            # But wait, if no keys are configured, maybe we shouldn't fail? 
+            # The original code at line 373 said: "if not allowed_keys: raise 401"
+            # So it enforces keys if any check is done.
+            pass
+
+        if not allowed_keys:
+             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key required")
+
         provided = None
         if x_api_key and x_api_key.strip():
             provided = x_api_key.strip()
@@ -379,8 +395,13 @@ def make_api_key_dependency(config: Config):
             import re
             m = re.match(r"(?i)Bearer\s+(.+)", authorization.strip())
             if m: provided = m.group(1).strip()
+            
         if not provided or provided not in allowed_keys:
+            # Record failure
+            protector.record_failure(request)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key")
+        
+        # Success
         request.state.api_key_id = provided
         return True
     return require_api_key
