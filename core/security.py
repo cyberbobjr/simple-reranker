@@ -35,7 +35,8 @@ class BruteForceProtector:
         self._last_mtime = 0.0
         
         # Thread safety for in-memory state
-        self._memory_lock = threading.Lock()
+        # Use RLock (reentrant lock) to allow nested acquisitions by the same thread
+        self._memory_lock = threading.RLock()
         
         self._reload_if_needed()
         
@@ -46,12 +47,14 @@ class BruteForceProtector:
             
         try:
             mtime = os.path.getmtime(self.ban_file)
-            if mtime > self._last_mtime:
-                # File changed, reload under lock to ensure we don't read partial write
-                lock = FileLock(self.lock_file)
-                with lock.acquire(timeout=5):
-                    self._load_from_disk()
-                    self._last_mtime = mtime
+            # Thread-safe check of _last_mtime
+            with self._memory_lock:
+                if mtime > self._last_mtime:
+                    # File changed, reload under lock to ensure we don't read partial write
+                    lock = FileLock(self.lock_file)
+                    with lock.acquire(timeout=5):
+                        self._load_from_disk()
+                        self._last_mtime = mtime
         except Exception as e:
             # Don't crash on locking/loading error, just log
             logging.getLogger("rerank").error(f"Failed to reload bans: {e}")
@@ -84,24 +87,31 @@ class BruteForceProtector:
             with self._memory_lock:
                 bans_to_save = dict(self._bans)
             
-            # Write to file (no lock needed, we hold file lock)
+            # Write local copy to file (no additional memory lock needed here;
+            # file locking is assumed to be handled by the caller)
             with open(self.ban_file, 'w') as f:
                 json.dump(bans_to_save, f)
             # Update mtime tracking so we don't reload our own write
-            self._last_mtime = os.path.getmtime(self.ban_file)
+            with self._memory_lock:
+                self._last_mtime = os.path.getmtime(self.ban_file)
         except Exception as e:
             logging.getLogger("rerank").error(f"Failed to save bans: {e}")
     
     def _save_bans_unlocked(self):
-        """Save bans to file (assumes file-locked AND memory-locked)."""
+        """Save bans to file (assumes file-locked AND memory-locked).
+        
+        Note: Caller MUST hold self._memory_lock before calling this method.
+        This is only used internally where we already hold the lock to avoid
+        re-acquiring it (which would work with RLock but is unnecessary overhead).
+        """
         if not self.ban_file:
             return
         
         try:
-            # Assume caller holds memory lock
+            # Caller holds memory lock - direct access to self._bans is safe
             with open(self.ban_file, 'w') as f:
                 json.dump(self._bans, f)
-            # Update mtime tracking so we don't reload our own write
+            # Update mtime tracking (caller holds lock)
             self._last_mtime = os.path.getmtime(self.ban_file)
         except Exception as e:
             logging.getLogger("rerank").error(f"Failed to save bans: {e}")
