@@ -10,6 +10,9 @@ from core.config import Config
 class BruteForceProtector:
     """Protect against brute force attacks on API keys."""
     
+    # Default timeout for file lock operations in seconds
+    FILE_LOCK_TIMEOUT = 10
+    
     def __init__(self, config: Config):
         self.enabled = False
         sec = config.get("security", {}).get("brute_force", {})
@@ -39,7 +42,7 @@ class BruteForceProtector:
         if not self.ban_file or not os.path.exists(self.ban_file):
             return
         try:
-            lock = FileLock(self.ban_file_lock, timeout=10)
+            lock = FileLock(self.ban_file_lock, timeout=self.FILE_LOCK_TIMEOUT)
             with lock:
                 with open(self.ban_file, 'r') as f:
                     data = json.load(f)
@@ -53,17 +56,25 @@ class BruteForceProtector:
         """Save bans to file with file locking for atomic writes."""
         if not self.ban_file:
             return
+        
+        temp_file = self.ban_file + ".tmp"
         try:
-            lock = FileLock(self.ban_file_lock, timeout=10)
+            lock = FileLock(self.ban_file_lock, timeout=self.FILE_LOCK_TIMEOUT)
             with lock:
                 # Write to a temporary file first, then rename for atomicity
-                temp_file = self.ban_file + ".tmp"
                 with open(temp_file, 'w') as f:
                     json.dump(self._bans, f)
                 # Atomic rename on POSIX systems
                 os.replace(temp_file, self.ban_file)
         except Exception as e:
             logging.getLogger("rerank").error(f"Failed to save bans: {e}")
+        finally:
+            # Clean up temporary file if it still exists
+            if os.path.exists(temp_file):
+                try:
+                    os.unlink(temp_file)
+                except Exception:
+                    pass  # Ignore cleanup errors
 
     def get_client_ip(self, request: Request) -> str:
         """Get best guess for client IP."""
