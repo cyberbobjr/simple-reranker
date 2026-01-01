@@ -377,7 +377,7 @@ def make_api_key_dependency(config: Config):
         protector.check_ip(request)
 
         if not allowed_keys:
-             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key required")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key required")
 
         provided = None
         if x_api_key and x_api_key.strip():
