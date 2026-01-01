@@ -4,6 +4,7 @@ import os
 import logging
 from typing import Dict, List
 from fastapi import Request, HTTPException, status
+from filelock import FileLock
 from core.config import Config
 
 class BruteForceProtector:
@@ -25,6 +26,7 @@ class BruteForceProtector:
         # Ensures ban_file is an absolute path
         raw_ban_file = sec.get("ban_file", "banned_ips.json")
         self.ban_file = os.path.abspath(raw_ban_file)
+        self.ban_file_lock = self.ban_file + ".lock"
         
         # State
         self._failures: Dict[str, List[float]] = {}  # ip -> list of timestamps
@@ -33,25 +35,33 @@ class BruteForceProtector:
         self._load_bans()
         
     def _load_bans(self):
-        """Load bans from file."""
+        """Load bans from file with file locking."""
         if not self.ban_file or not os.path.exists(self.ban_file):
             return
         try:
-            with open(self.ban_file, 'r') as f:
-                data = json.load(f)
-                now = time.time()
-                # Only keep active bans
-                self._bans = {ip: exp for ip, exp in data.items() if exp > now}
+            lock = FileLock(self.ban_file_lock, timeout=10)
+            with lock:
+                with open(self.ban_file, 'r') as f:
+                    data = json.load(f)
+                    now = time.time()
+                    # Only keep active bans
+                    self._bans = {ip: exp for ip, exp in data.items() if exp > now}
         except Exception as e:
             logging.getLogger("rerank").error(f"Failed to load bans: {e}")
 
     def _save_bans(self):
-        """Save bans to file."""
+        """Save bans to file with file locking for atomic writes."""
         if not self.ban_file:
             return
         try:
-            with open(self.ban_file, 'w') as f:
-                json.dump(self._bans, f)
+            lock = FileLock(self.ban_file_lock, timeout=10)
+            with lock:
+                # Write to a temporary file first, then rename for atomicity
+                temp_file = self.ban_file + ".tmp"
+                with open(temp_file, 'w') as f:
+                    json.dump(self._bans, f)
+                # Atomic rename on POSIX systems
+                os.replace(temp_file, self.ban_file)
         except Exception as e:
             logging.getLogger("rerank").error(f"Failed to save bans: {e}")
 
