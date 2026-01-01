@@ -377,15 +377,6 @@ def make_api_key_dependency(config: Config):
         protector.check_ip(request)
 
         if not allowed_keys:
-            # If no keys configured, define behavior (deny all or allow all? Original code raised 401)
-            # Original code:
-            # if not allowed_keys: raise HTTPException(...)
-            # But wait, if no keys are configured, maybe we shouldn't fail? 
-            # The original code at line 373 said: "if not allowed_keys: raise 401"
-            # So it enforces keys if any check is done.
-            pass
-
-        if not allowed_keys:
              raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key required")
 
         provided = None
