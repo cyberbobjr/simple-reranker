@@ -2,6 +2,7 @@ import time
 import json
 import os
 import logging
+import threading
 from typing import Dict, List
 from fastapi import Request, HTTPException, status
 from filelock import FileLock
@@ -33,6 +34,9 @@ class BruteForceProtector:
         self._bans: Dict[str, float] = {}            # ip -> ban_expiry_timestamp
         self._last_mtime = 0.0
         
+        # Thread safety for in-memory state
+        self._memory_lock = threading.Lock()
+        
         self._reload_if_needed()
         
     def _reload_if_needed(self):
@@ -60,7 +64,9 @@ class BruteForceProtector:
             with open(self.ban_file, 'r') as f:
                 data = json.load(f)
                 now = time.time()
-                self._bans = {ip: exp for ip, exp in data.items() if exp > now}
+                # Thread-safe update of in-memory state
+                with self._memory_lock:
+                    self._bans = {ip: exp for ip, exp in data.items() if exp > now}
         except Exception as e:
             logging.getLogger("rerank").error(f"Failed to parse ban file: {e}")
 
@@ -69,13 +75,30 @@ class BruteForceProtector:
         self._reload_if_needed()
 
     def _save_bans(self):
-        """Save bans to file (assumes locked!)."""
+        """Save bans to file (assumes file-locked, acquires memory lock)."""
         if not self.ban_file:
             return
         
-        # We must write atomically-ish. json.dump isn't atomic.
-        # But we are protected by lock.
         try:
+            # Read current bans under memory lock
+            with self._memory_lock:
+                bans_to_save = dict(self._bans)
+            
+            # Write to file (no lock needed, we hold file lock)
+            with open(self.ban_file, 'w') as f:
+                json.dump(bans_to_save, f)
+            # Update mtime tracking so we don't reload our own write
+            self._last_mtime = os.path.getmtime(self.ban_file)
+        except Exception as e:
+            logging.getLogger("rerank").error(f"Failed to save bans: {e}")
+    
+    def _save_bans_unlocked(self):
+        """Save bans to file (assumes file-locked AND memory-locked)."""
+        if not self.ban_file:
+            return
+        
+        try:
+            # Assume caller holds memory lock
             with open(self.ban_file, 'w') as f:
                 json.dump(self._bans, f)
             # Update mtime tracking so we don't reload our own write
@@ -111,24 +134,31 @@ class BruteForceProtector:
         ip = self.get_client_ip(request)
         now = time.time()
         
-        # Check if banned
-        if ip in self._bans:
+        # Check if banned (thread-safe read)
+        with self._memory_lock:
+            if ip not in self._bans:
+                return  # Not banned, exit early
             expiry = self._bans[ip]
-            if now < expiry:
-                 # Still banned
-                 raise HTTPException(
-                     status_code=status.HTTP_403_FORBIDDEN, 
-                     detail=f"Access denied: IP banned due to too many failed attempts. Try again later."
-                 )
-            else:
-                # Ban expired - Remove atomically
-                try:
-                    lock = FileLock(self.lock_file)
-                    with lock.acquire(timeout=5):
-                        self._load_from_disk() # Refresh state inside lock
-                        if ip in self._bans:   # Double check
+        
+        # Process ban status outside the lock
+        if now < expiry:
+            # Still banned
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail=f"Access denied: IP banned due to too many failed attempts. Try again later."
+            )
+        else:
+            # Ban expired - Remove atomically
+            try:
+                lock = FileLock(self.lock_file)
+                with lock.acquire(timeout=5):
+                    self._load_from_disk()  # Refresh state inside lock (acquires memory lock internally)
+                    with self._memory_lock:
+                        if ip in self._bans:  # Double check after reload
                             del self._bans[ip]
-                            self._save_bans()
+                            self._save_bans_unlocked()  # Use unlocked version since we hold memory lock
+            except Exception as e:
+                logging.getLogger("rerank").error(f"Failed to remove expired ban: {e}")
 
     def record_failure(self, request: Request):
         """Record a failed login attempt."""
@@ -138,18 +168,23 @@ class BruteForceProtector:
         ip = self.get_client_ip(request)
         now = time.time()
         
-        # Clean old failures for this IP
-        if ip not in self._failures:
-            self._failures[ip] = []
+        # Thread-safe update of failures
+        with self._memory_lock:
+            # Clean old failures for this IP
+            if ip not in self._failures:
+                self._failures[ip] = []
+            
+            # Keep only failures within window
+            self._failures[ip] = [t for t in self._failures[ip] if now - t < self.window_seconds]
+            
+            # Add new failure
+            self._failures[ip].append(now)
+            
+            # Check if threshold reached
+            failure_count = len(self._failures[ip])
         
-        # Keep only failures within window
-        self._failures[ip] = [t for t in self._failures[ip] if now - t < self.window_seconds]
-        
-        # Add new failure
-        self._failures[ip].append(now)
-        
-        # Check if threshold reached
-        if len(self._failures[ip]) >= self.max_failures:
+        # Ban outside the lock to avoid holding it during file I/O
+        if failure_count >= self.max_failures:
             self.ban_ip(ip)
 
     def ban_ip(self, ip: str):
@@ -162,16 +197,17 @@ class BruteForceProtector:
                 # 1. Load latest state (critical for concurrency)
                 self._load_from_disk()
                 
-                # 2. Update state
-                self._bans[ip] = expiry
-                
-                # 3. Save
-                self._save_bans()
+                # 2. Update state (thread-safe)
+                with self._memory_lock:
+                    self._bans[ip] = expiry
+                    # 3. Save (use unlocked version since we hold memory lock)
+                    self._save_bans_unlocked()
                 
             logging.getLogger("rerank").warning(f"Banned IP {ip} for {self.ban_seconds}s after {self.max_failures} failed attempts")
         except Exception as e:
             logging.getLogger("rerank").error(f"Failed to execute ban: {e}")
             
         # Also clear failures so they don't immediately re-ban after expiry if they fail once
-        if ip in self._failures:
-            del self._failures[ip]
+        with self._memory_lock:
+            if ip in self._failures:
+                del self._failures[ip]
