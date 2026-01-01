@@ -338,7 +338,7 @@ security:
 
 **How it works:**
 - Tracks failed authentication attempts per IP.
-- detailed logs of failures and bans.
+- Logs detailed information about failures and bans.
 - Temporarily bans IPs exceeding `max_failures` within `window_seconds`.
 - Returns `403 Forbidden` for banned IPs.
 - **Reverse Proxy**: If you run behind a reverse proxy (Nginx, Traefik, etc.), set `trust_proxy_headers: true` to correctly identify client IPs via `X-Forwarded-For` or `X-Real-IP`.
