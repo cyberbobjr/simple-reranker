@@ -53,7 +53,7 @@ class BruteForceProtector:
                     # File changed, reload under lock to ensure we don't read partial write
                     lock = FileLock(self.lock_file)
                     with lock.acquire(timeout=5):
-                        self._load_from_disk()
+                        self._load_from_disk()  # RLock allows nested acquisition
                         self._last_mtime = mtime
         except Exception as e:
             # Don't crash on locking/loading error, just log
@@ -78,7 +78,12 @@ class BruteForceProtector:
         self._reload_if_needed()
 
     def _save_bans(self):
-        """Save bans to file (assumes file-locked, acquires memory lock)."""
+        """Save bans to file.
+        
+        Acquires memory lock to read current bans, then writes them to file.
+        Note: Caller is responsible for acquiring file lock before calling this method
+        to prevent concurrent file access from other processes.
+        """
         if not self.ban_file:
             return
         
@@ -87,8 +92,7 @@ class BruteForceProtector:
             with self._memory_lock:
                 bans_to_save = dict(self._bans)
             
-            # Write local copy to file (no additional memory lock needed here;
-            # file locking is assumed to be handled by the caller)
+            # Write local copy to file
             with open(self.ban_file, 'w') as f:
                 json.dump(bans_to_save, f)
             # Update mtime tracking so we don't reload our own write
