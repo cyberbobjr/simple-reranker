@@ -125,7 +125,3 @@ class BruteForceProtector:
         # Also clear failures so they don't immediately re-ban after expiry if they fail once
         if ip in self._failures:
             del self._failures[ip]
-
-    def record_success(self, request: Request):
-        """Optional: clear failures on success?"""
-        pass
