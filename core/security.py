@@ -84,11 +84,11 @@ class BruteForceProtector:
         if ip in self._bans:
             expiry = self._bans[ip]
             if now < expiry:
-                 # Still banned
-                 raise HTTPException(
-                     status_code=status.HTTP_403_FORBIDDEN, 
-                     detail=f"Access denied: IP banned due to too many failed attempts. Try again later."
-                 )
+                # Still banned
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail=f"Access denied: IP banned due to too many failed attempts. Try again later."
+                )
             else:
                 # Ban expired
                 del self._bans[ip]
