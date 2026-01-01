@@ -5,6 +5,11 @@ All notable changes to the Reranking & Embedding Service will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-01-01
+
+### Added
+- add brute force protection for API keys with configurable settings, proxy support, and documentation.
+
 ## [1.4.0] - 2025-10-17
 
 ### Changed
