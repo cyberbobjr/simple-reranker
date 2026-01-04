@@ -11,13 +11,13 @@ RUN apt-get update && apt-get install -y \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update \
     && apt-get install -y \
-        python3.12 \
-        python3.12-dev \
-        python3.12-venv \
-        python3-pip \
-        build-essential \
-        curl \
-        wget \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
+    python3-pip \
+    build-essential \
+    curl \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurer Python 3.12 comme version par défaut
@@ -32,7 +32,7 @@ RUN wget -O get-pip.py https://bootstrap.pypa.io/get-pip.py \
 # PyTorch CUDA (adapte la version CUDA si besoin)
 RUN pip install --extra-index-url https://download.pytorch.org/whl/cu128 torch
 # Libs modèles
-RUN pip install "transformers>=4.44" "huggingface-hub>=0.24" "accelerate>=0.33" fastapi uvicorn[standard] pyyaml setuptools wheel hf_transfer
+RUN pip install "transformers>=4.56.3" "huggingface-hub" "hf-xet" "accelerate" fastapi uvicorn[standard] pyyaml setuptools wheel hf_transfer
 # sentence-transformers requis pour le service complet
 RUN pip install sentence-transformers
 # flash-attn (optionnel). Nécessite NVCC pour la compilation.
