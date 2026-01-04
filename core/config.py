@@ -1,11 +1,13 @@
 """Configuration management for the reranker service."""
 
+import logging
 import os
 import sys
-import yaml
-import logging
 from typing import Any, Dict
-from huggingface_hub import snapshot_download, login as hf_login
+
+import yaml
+from huggingface_hub import login as hf_login
+from huggingface_hub import snapshot_download
 
 # Try to import cache checking function
 try:
@@ -175,6 +177,8 @@ class Config:
         downloaded = []
         prefetch_repos = hf_cfg.get("prefetch") or []
 
+        target_cache_dir = os.path.expanduser(cache_dir) if cache_dir else (os.path.expanduser(str(model_dir)) if model_dir else None)
+
         if prefetch_repos:
             logger.info("boot_prefetch_start", extra={"extra":{"total_repos": len(prefetch_repos), "repos": prefetch_repos}})
 
@@ -193,7 +197,7 @@ class Config:
                 # Check if model is already downloaded
                 if HAS_CACHE_CHECK:
                     try:
-                        cached_path = try_to_load_from_cache(repo_id=repo, filename="config.json")
+                        cached_path = try_to_load_from_cache(repo_id=repo, filename="config.json", cache_dir=target_cache_dir)
                         if cached_path is not None:
                             logger.info("boot_prefetch_cached", extra={"extra":{
                                 "repo": repo,
@@ -201,7 +205,7 @@ class Config:
                                 "status": "already_cached"
                             }})
                             # Still get the path for consistency
-                            path = snapshot_download(repo_id=repo, token=token, local_files_only=True)
+                            path = snapshot_download(repo_id=repo, token=token, local_files_only=True, cache_dir=target_cache_dir)
                             downloaded.append((repo, path))
                             continue
                     except Exception:
@@ -215,12 +219,13 @@ class Config:
                 }})
 
                 # Utiliser le système de cache standard de HuggingFace
-                # HF_HOME a été configuré plus haut, donc HF utilisera automatiquement le bon répertoire
+                # HF_HOME a été configuré plus haut, mais on force le cache_dir pour être sûr
                 path = snapshot_download(
                     repo_id=repo,
                     token=token,
                     # Disable symlinks to avoid issues in containers
-                    local_files_only=False
+                    local_files_only=False,
+                    cache_dir=target_cache_dir
                 )
 
                 logger.info("boot_prefetch_downloaded", extra={"extra":{
