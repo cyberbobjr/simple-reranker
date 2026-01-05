@@ -218,8 +218,8 @@ class Config:
                     "message": "Downloading model files from Hugging Face..."
                 }})
 
-                # Utiliser le système de cache standard de HuggingFace
-                # HF_HOME a été configuré plus haut, mais on force le cache_dir pour être sûr
+                # Use HuggingFace's standard cache system
+                # HF_HOME was configured above, but we force cache_dir to be sure
                 path = snapshot_download(
                     repo_id=repo,
                     token=token,
