@@ -153,7 +153,7 @@ class Config:
             summary["hf_home"] = os.environ.get("HF_HOME")
             logger.info("boot_hf_home_set", extra={"extra":{"HF_HOME": summary["hf_home"]}})
         elif model_dir:
-            # Si model_dir est configuré mais pas cache_dir, utiliser model_dir comme HF_HOME
+            # If model_dir is configured but not cache_dir, use model_dir as HF_HOME
             os.environ["HF_HOME"] = os.path.expanduser(str(model_dir))
             summary["hf_home"] = os.environ.get("HF_HOME")
             logger.info("boot_hf_home_set_from_model_dir", extra={"extra":{"HF_HOME": summary["hf_home"]}})
@@ -218,8 +218,8 @@ class Config:
                     "message": "Downloading model files from Hugging Face..."
                 }})
 
-                # Utiliser le système de cache standard de HuggingFace
-                # HF_HOME a été configuré plus haut, mais on force le cache_dir pour être sûr
+                # Use HuggingFace's standard caching system
+                # HF_HOME was configured above, but we force cache_dir to be sure
                 path = snapshot_download(
                     repo_id=repo,
                     token=token,
