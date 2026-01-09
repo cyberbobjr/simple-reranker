@@ -14,6 +14,10 @@ from core.config import Config
 from services.embedding_service import EmbeddingService
 from services.rerank_service import RerankService
 
+# Import warmup_models from the main rerank_service script
+# This needs to be imported separately as it's not in the services module
+import rerank_service as rerank_service_module
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("runpod_worker")
@@ -21,8 +25,11 @@ logger = logging.getLogger("runpod_worker")
 # Load configuration
 config_path = os.environ.get("RERANK_CONFIG", "rerank_config.yaml")
 if not os.path.exists(config_path):
-    logger.warning(f"Config file {config_path} not found, using defaults")
-    # Generate default config if needed, or handle error
+    logger.error(
+        f"Config file {config_path} not found. Set RERANK_CONFIG or create "
+        "a default configuration file before starting the worker."
+    )
+    sys.exit(1)
     
 config = Config(config_path)
 
@@ -30,7 +37,21 @@ config = Config(config_path)
 _LOADED_MODELS = {}
 
 def load_services():
-    """Initialize services and warmup models."""
+    """
+    Initialize services and warmup models.
+    
+    This function performs the following operations:
+    1. Sets up HuggingFace authentication and cache directory
+    2. Initializes the EmbeddingService for text embeddings
+    3. Initializes the RerankService for document reranking
+    4. Warms up the models based on configuration settings
+    
+    The warmup process loads the models into memory and runs test inference
+    to ensure they are ready for processing requests with minimal latency.
+    
+    Raises:
+        Exception: If service initialization or model warmup fails
+    """
     logger.info("Initializing services...")
     
     # Setup HF auth and cache
@@ -41,9 +62,8 @@ def load_services():
     embedding_service = EmbeddingService(config.data, _LOADED_MODELS)
     rerank_service = RerankService(config.data, _LOADED_MODELS)
     
-    # Warmup models
-    from rerank_service import warmup_models
-    warmup_summary = warmup_models(config)
+    # Warmup models using the function from the main rerank_service module
+    warmup_summary = rerank_service_module.warmup_models(config)
     logger.info(f"Warmup complete: {warmup_summary}")
 
 # Load models at startup
@@ -70,9 +90,17 @@ def handler(job):
         }
     }
     """
+    # Validate job structure before accessing attributes
+    if not isinstance(job, dict):
+        logger.error(f"Invalid job payload type: {type(job).__name__}")
+        return {"error": "Invalid job payload"}
+    
     job_input = job.get("input", {})
     if not job_input:
-        return {"error": "Missing input"}
+        return {
+            "error": 'Missing or empty "input" field in job request. '
+                     'Expected format: {"input": {...}}.'
+        }
         
     method = job_input.get("method")
     
@@ -83,7 +111,13 @@ def handler(job):
         elif "texts" in job_input or "documents" in job_input:
             method = "encode"
         else:
-            return {"error": "Could not infer method from input"}
+            return {
+                "error": (
+                    "Could not infer method from input. Expected either "
+                    "('query' + 'documents') for 'rerank' or "
+                    "('texts'/'documents') for 'encode'."
+                )
+            }
 
     try:
         if method == "rerank":
@@ -118,7 +152,7 @@ def handler(job):
             # Convert numpy arrays to lists for JSON serialization
             return {
                 "embeddings": [e.tolist() if hasattr(e, "tolist") else e for e in embeddings],
-                "model": job_input.get("model") or config.get("model", {}).get("embedding_name")
+                "model": job_input.get("model") or config.data.get("model", {}).get("embedding_name")
             }
             
         else:
