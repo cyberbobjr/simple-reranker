@@ -16,7 +16,7 @@ from services.rerank_service import RerankService
 
 # Import warmup_models from the main rerank_service script
 # This needs to be imported separately as it's not in the services module
-import rerank_service
+import rerank_service as rerank_service_module
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -63,7 +63,7 @@ def load_services():
     rerank_service = RerankService(config.data, _LOADED_MODELS)
     
     # Warmup models using the function from the main rerank_service module
-    warmup_summary = rerank_service.warmup_models(config)
+    warmup_summary = rerank_service_module.warmup_models(config)
     logger.info(f"Warmup complete: {warmup_summary}")
 
 # Load models at startup

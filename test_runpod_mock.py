@@ -17,6 +17,10 @@ sys.modules["services.rerank_service"] = MagicMock()
 sys.modules["services.embedding_service"] = MagicMock()
 sys.modules["rerank_service"] = MagicMock()
 
+# Mock the warmup_models function
+mock_warmup = MagicMock(return_value={"enabled": False})
+sys.modules["rerank_service"].warmup_models = mock_warmup
+
 # Now import the handler
 # We need to patch the global variables in runpod_handler
 with patch("builtins.open", create=True) as mock_open:
