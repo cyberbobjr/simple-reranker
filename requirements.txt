@@ -64,3 +64,4 @@ exceptiongroup==1.3.0
 networkx==3.4.2
 sympy==1.14.0
 mpmath==1.3.0
+runpod>=1.6.0
